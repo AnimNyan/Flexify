@@ -16,7 +16,7 @@ from . import Flexify
 bl_info = {
     "name": "Flexify - Transfer Shape Keys",
     "author": "Anime Nyan",
-    "version": (1, 0, 0),
+    "version": (1, 0, 1),
     "blender": (3, 3, 0),
     "location": "3D View > Properties > Shapekeys",
     "description": "Addon for transfering shape keys",
