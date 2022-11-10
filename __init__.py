@@ -22,8 +22,8 @@ bl_info = {
     "description": "Addon for transfering shape keys",
     "warning": "",
     "wiki_url": "https://github.com/AnimNyan/Flexify/",
-    "category": "Utility",
-    "tracker_url": "https://github.com/AnimNyan/Flexify/"
+    "category": "Rigging",
+    "tracker_url": "https://github.com/AnimNyan/Flexify/issues"
 }
 
 def register():
