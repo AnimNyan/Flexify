@@ -4,15 +4,14 @@ import bpy
 #make true or false
 class transfer_shape_keys_properties(bpy.types.PropertyGroup):
     is_add_modifiers_if_not_there: bpy.props.BoolProperty(name="Add Solidify + Mesh Deform if not exist", default = True)
-    solidify_thickness_float: bpy.props.FloatProperty(name="Solidify Thickness", default = -0.1)
-  
+    solidify_thickness_float: bpy.props.FloatProperty(name="Solidify Thickness", default = -0.1, min = -10, max = 10)
 
 
 
 #this is panel 2 as it is the second panel in the psk/psa panel
-class TRANSFERSHAPEKEYS_PT_main_panel(bpy.types.Panel):
+class FLEXIFY_PT_main_panel(bpy.types.Panel):
     bl_label = "Transfer Shape Keys"
-    bl_idname = "TRANSFERSHAPEKEYS_PT_main_panel"
+    bl_idname = "FLEXIFY_PT_main_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Shapekeys"
@@ -23,28 +22,28 @@ class TRANSFERSHAPEKEYS_PT_main_panel(bpy.types.Panel):
         scene = context.scene
         #allow access to user inputted properties through pointer
         #to properties
-        transfershapekeystool = scene.transfershapekeys_tool
+        flexifytool = scene.flexify_tool
 
         layout.prop(scene, "mesh_source")
         layout.prop(scene, "mesh_target")
 
         layout.separator()
 
-        layout.prop(transfershapekeystool, "is_add_modifiers_if_not_there")
-        layout.prop(transfershapekeystool, "solidify_thickness_float")
+        layout.prop(flexifytool, "is_add_modifiers_if_not_there")
+        layout.prop(flexifytool, "solidify_thickness_float")
         
         layout.separator()
 
-        layout.operator("transfershapekeys.transfer_shapekeys_operator")
+        layout.operator("flexify.transfer_shapekeys_operator")
         
         
         
 
 #---------------fix the active action (only one) for killer and survivor 
-class TRANSFERSHAPEKEYS_OT_transfer_shapekeys(bpy.types.Operator):
+class FLEXIFY_OT_transfer_shapekeys(bpy.types.Operator):
     bl_label = "Transfer Shape Keys"
     bl_description = "Transfer Shape Keys from first mesh to second mesh"
-    bl_idname = "transfershapekeys.transfer_shapekeys_operator"
+    bl_idname = "flexify.transfer_shapekeys_operator"
 
     def execute(self, context):
         transfer_all_shape_keys()
@@ -71,30 +70,110 @@ def transfer_all_shape_keys():
     scene = bpy.context.scene
     #allow access to user inputted properties through pointer
     #to properties
-    transfershapekeystool = scene.transfershapekeys_tool
+    flexifytool = scene.flexify_tool
 
-    is_add_modifiers_if_not_there = transfershapekeystool.is_add_modifiers_if_not_there
+    is_add_modifiers_if_not_there = flexifytool.is_add_modifiers_if_not_there
 
+    #----------give error to user saying that mesh_source or mesh_target has not been selected
+    if (mesh_source == None):
+        #show user feedback error message so they know what to do
+        #also print to console so they can check error message from console
+        error_message = "Error: Please select a Source Mesh before pressing Transfer Shape Keys"
+        bpy.ops.flexify.show_message_operator(message = error_message)
+        log(error_message)
+
+        #return will stop the rest of this function executing
+        #and return prematurely as there is no source mesh
+        #so the transfer shape keys cannot work
+        return
+
+    if (mesh_target == None):
+        #show user feedback error message so they know what to do
+        #also print to console so they can check error message from console
+        error_message = "Error: Please select a Target Mesh before pressing Transfer Shape Keys"
+        bpy.ops.flexify.show_message_operator(message = error_message)
+        log(error_message)
+
+        #return will stop the rest of this function executing
+        #and return prematurely as there is no target mesh
+        #so the transfer shape keys cannot work
+        return
+
+    #----------give error to user saying that mesh_source does not have any shape keys to transfer
+    if (mesh_source.data.shape_keys is None):
+         #show user feedback error message so they know what to do
+        #also print to console so they can check error message from console
+        error_message = "Error: Source Mesh has no Shapekeys to transfer, so the shapekey transfer cannot be done!"
+        bpy.ops.flexify.show_message_operator(message = error_message)
+        log(error_message)
+
+        #return will stop the rest of this function executing
+        #and return prematurely as there is no shapekeys on the source mesh to transfer
+        #so the transfer shape keys cannot work
+        return
 
     #find the first mesh deform modifier for mesh_target
     isFoundSolidify = False
     isFoundMeshDeform = False
 
+    #the target mesh must have the mesh deform modifier
     for modifier in mesh_target.modifiers:
-        
-        #we use the (and not isFoundMeshDeform) because we want to use
-        #the first mesh deform modifier in case of 2 or more
-        if (modifier.type == "MESH_DEFORM" and not isFoundMeshDeform):
+        if (modifier.type == "MESH_DEFORM"):
             mesh_deform_modifier = modifier
             isFoundMeshDeform = True
 
-        #we use the (and not isFoundSolidify) because we want to use
-        #the first solidify modifier in case of 2 or more
-        elif(modifier.type == "SOLIDIFY" and not isFoundSolidify):
+            #break from loop
+            #as we have found the first mesh deform modifier
+            #we don't care or use any of the others
+            break
+    
+
+    #the source mesh must have the solidify modifier
+    for modifier in mesh_source.modifiers:
+        if (modifier.type == "SOLIDIFY"):
             solidify_modifier = modifier
             isFoundSolidify = True
+
+            #break from loop
+            #as we have found the first solidify modifier
+            #we don't care or use any of the others
+            break
     
-    
+    #-----------------Check the Solidify Modifier
+    if (isFoundSolidify == False):
+
+        #----------if setting to add modifiers is activated
+        #add the Solidify Modifier
+        if(is_add_modifiers_if_not_there):
+            solidify_modifier = mesh_source.modifiers.new(type="SOLIDIFY", name="Solidify")
+
+            #change the Thickness of the newly created Solidify modifier to the user setting
+            solidify_modifier.thickness = flexifytool.solidify_thickness_float
+        
+
+        #else show the error instead
+        else:
+            #show user feedback error message so they know what to do
+            #also print to console so they can check error message from console
+            error_message = "Error: To Mesh \'" + mesh_target.name + "\' does not have a Solidify modifier, so the shape key transfer cannot be done!"
+            bpy.ops.flexify.show_message_operator(message = error_message)
+            log(error_message)
+
+            #return will stop the rest of this function executing
+            #and return prematurely as there is no mesh deform modifier to apply
+            #so the transfer shape keys cannot work
+            return
+
+
+
+    # if a solidify modifier is found adjust the thickness to be the
+    # user selected thickness
+    else:
+        solidify_modifier.thickness = flexifytool.solidify_thickness_float
+
+
+
+
 
     #-----------------Check the Mesh Deform Modifier
     #if there is no mesh deform modifier add it or show error depending on option user has chosen
@@ -103,7 +182,7 @@ def transfer_all_shape_keys():
         #----------if setting to add modifiers is activated
         #add the MeshDeform
         if(is_add_modifiers_if_not_there):
-            mesh_deform_modifier = mesh_target.modifiers.new(type="MESH_DEFORM")
+            mesh_deform_modifier = mesh_target.modifiers.new(type="MESH_DEFORM", name="Mesh Deform")
         
 
         #else show the error instead
@@ -111,7 +190,7 @@ def transfer_all_shape_keys():
             #show user feedback error message so they know what to do
             #also print to console so they can check error message from console
             error_message = "Error: To Mesh \'" + mesh_target.name + "\' does not have a Mesh Deform modifier, so the shape key transfer cannot be done!"
-            bpy.ops.transfershapekeys.show_message_operator(message = error_message)
+            bpy.ops.flexify.show_message_operator(message = error_message)
             log(error_message)
 
             #return will stop the rest of this function executing
@@ -129,7 +208,7 @@ def transfer_all_shape_keys():
             #show user feedback error message so they know what to do
             #also print to console so they can check error message from console
             error_message = "Error: Mesh Deform modifier on \'" + mesh_target.name + "\' does not have an target Object, so the shape key transfer cannot be done!"
-            bpy.ops.transfershapekeys.show_message_operator(message = error_message)
+            bpy.ops.flexify.show_message_operator(message = error_message)
             log(error_message)
 
             #return will stop the rest of this function executing
@@ -142,7 +221,7 @@ def transfer_all_shape_keys():
             #show user feedback error message so they know what to do
             #also print to console so they can check error message from console
             error_message = "Error: Mesh Deform modifier on \'" + mesh_target.name + "\' is not bound, so the shape key transfer cannot be done!"
-            bpy.ops.transfershapekeys.show_message_operator(message = error_message)
+            bpy.ops.flexify.show_message_operator(message = error_message)
             log(error_message)
 
             #return will stop the rest of this function executing
@@ -150,30 +229,7 @@ def transfer_all_shape_keys():
             #is not bound so the shape keys will not transfer over properly
             return
 
-    #-----------------Check the Solidify Modifier
-    if (isFoundSolidify == False):
-
-        #----------if setting to add modifiers is activated
-        #add the Solidify Modifier
-        if(is_add_modifiers_if_not_there):
-            solidify_modifier = mesh_target.modifiers.new(type="SOLIDIFY")
-
-            #change the Thickness of the newly created Solidfy modifier to the user setting
-            solidify_modifier.thickness = transfershapekeystool.solidify_thickness_float
-        
-
-        #else show the error instead
-        else:
-            #show user feedback error message so they know what to do
-            #also print to console so they can check error message from console
-            error_message = "Error: To Mesh \'" + mesh_target.name + "\' does not have a Solidify modifier, so the shape key transfer cannot be done!"
-            bpy.ops.transfershapekeys.show_message_operator(message = error_message)
-            log(error_message)
-
-            #return will stop the rest of this function executing
-            #and return prematurely as there is no mesh deform modifier to apply
-            #so the transfer shape keys cannot work
-            return
+    
 
 
     #------------------------------Do Transfer Shape Keys now that the checks for valid shape key transfer is done
@@ -188,7 +244,7 @@ def transfer_all_shape_keys():
     for shapekey_keyblock in mesh_source.data.shape_keys.key_blocks:
         shapekey_keyblock.value = 0
 
-
+    
 
 
     #get the basis shape key which will be the first one 
@@ -253,8 +309,8 @@ def get_is_problem_jaw_bone_var():
 
 #class that is shown when a message needs to 
 #pop up for the user as feedback
-class TRANSFERSHAPEKEYS_OT_show_message(bpy.types.Operator):
-    bl_idname = "transfershapekeys.show_message_operator"
+class FLEXIFY_OT_show_message(bpy.types.Operator):
+    bl_idname = "flexify.show_message_operator"
     bl_label = ""
     bl_description = "Show Message for PSK PSA importer"
     bl_options = {'REGISTER'}
@@ -294,21 +350,21 @@ def filter_callback_only_meshes(self, object):
 
 
 
-classes = [transfer_shape_keys_properties, TRANSFERSHAPEKEYS_PT_main_panel,
+classes = [transfer_shape_keys_properties, FLEXIFY_PT_main_panel,
 
-TRANSFERSHAPEKEYS_OT_transfer_shapekeys,
+FLEXIFY_OT_transfer_shapekeys,
 
-TRANSFERSHAPEKEYS_OT_show_message]
+FLEXIFY_OT_show_message]
 
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
         
-    #register transfershapekeys_tool as a type which has all
+    #register flexify_tool as a type which has all
     #the user input properties from the properties class
     #use a unique name so you don't stop other add ons
     #working which also register pointer properties
-    bpy.types.Scene.transfershapekeys_tool = bpy.props.PointerProperty(type = transfer_shape_keys_properties)
+    bpy.types.Scene.flexify_tool = bpy.props.PointerProperty(type = transfer_shape_keys_properties)
 
     #create a pointer property to select an object
     #this will create a dropdown so a user can select objects
@@ -332,8 +388,8 @@ def unregister():
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
         
-    #unregister transfershapekeys_tool as a type
-    del bpy.types.Scene.transfershapekeys_tool
+    #unregister flexify_tool as a type
+    del bpy.types.Scene.flexify_tool
     del bpy.types.Scene.mesh_source
     del bpy.types.Scene.mesh_target
  
